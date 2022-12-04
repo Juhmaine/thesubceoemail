@@ -28,18 +28,17 @@ module Postal
     @config ||= begin
       require 'hashie/mash'
       config = Hashie::Mash.new(self.defaults)
-      config.deep_merge(self.yaml_config)
+      config = config.deep_merge(self.yaml_config)
+      config.deep_merge(self.local_yaml_config)
     end
   end
 
   def self.config_root
     @config_root ||= begin
-      if __FILE__ =~ /\A\/opt\/postal/
-        Pathname.new("/opt/postal/config")
-      elsif ENV['POSTAL_CONFIG_ROOT']
+      if ENV['POSTAL_CONFIG_ROOT']
         Pathname.new(ENV['POSTAL_CONFIG_ROOT'])
       else
-        Pathname.new(File.expand_path("../../../config", __FILE__))
+        Pathname.new(File.expand_path("../../../config/postal", __FILE__))
       end
     end
   end
@@ -48,8 +47,6 @@ module Postal
     @log_root ||= begin
       if config.logging.root
         Pathname.new(config.logging.root)
-      elsif __FILE__ =~ /\/opt\/postal/
-        Pathname.new("/opt/postal/log")
       else
         app_root.join('log')
       end
@@ -57,11 +54,29 @@ module Postal
   end
 
   def self.config_file_path
-    @config_file_path ||= File.join(config_root, 'postal.yml')
+    @config_file_path ||= begin
+      if env == 'default'
+        File.join(config_root, 'postal.yml')
+      else
+        File.join(config_root, "postal.#{env}.yml")
+      end
+    end
+  end
+
+  def self.env
+    @env ||= ENV.fetch('POSTAL_ENV', 'default')
   end
 
   def self.yaml_config
     @yaml_config ||= File.exist?(config_file_path) ? YAML.load_file(config_file_path) : {}
+  end
+
+  def self.local_config_file_path
+    @local_config_file_path ||= File.join(config_root, 'postal.local.yml')
+  end
+
+  def self.local_yaml_config
+    @local_yaml_config ||= File.exist?(local_config_file_path) ? YAML.load_file(local_config_file_path) : {}
   end
 
   def self.defaults_file_path
@@ -142,35 +157,6 @@ module Postal
     end
   end
 
-  def self.fast_server_default_private_key_path
-    config.fast_server.default_private_key_path || config_root.join('fast_server.key')
-  end
-
-  def self.fast_server_default_private_key
-    @fast_server_default_private_key ||= OpenSSL::PKey::RSA.new(File.read(fast_server_default_private_key_path))
-  end
-
-  def self.fast_server_default_certificate_path
-    config.fast_server.default_tls_certificate_path || config_root.join('fast_server.cert')
-  end
-
-  def self.fast_server_default_certificate_data
-    @fast_server_default_certificate_data ||= File.read(fast_server_default_certificate_path)
-  end
-
-  def self.fast_server_default_certificates
-    @fast_server_default_certificates ||= begin
-      certs = self.fast_server_default_certificate_data.scan(/-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----/m)
-      certs.map do |c|
-        OpenSSL::X509::Certificate.new(c)
-      end.freeze
-    end
-  end
-
-  def self.lets_encrypt_private_key_path
-    @lets_encrypt_private_key_path ||= Postal.config_root.join('lets_encrypt.pem')
-  end
-
   def self.signing_key_path
     config_root.join('signing.key')
   end
@@ -194,17 +180,9 @@ module Postal
       raise ConfigError, "No config found at #{self.config_file_path}"
     end
 
-    unless File.exists?(self.lets_encrypt_private_key_path)
-      raise ConfigError, "No Let's Encrypt private key found at #{self.lets_encrypt_private_key_path}"
-    end
-
     unless File.exists?(self.signing_key_path)
       raise ConfigError, "No signing key found at #{self.signing_key_path}"
     end
-  end
-
-  def self.tracking_available?
-    self.config.fast_server.enabled?
   end
 
   def self.ip_pools?

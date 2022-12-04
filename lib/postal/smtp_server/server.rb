@@ -49,7 +49,7 @@ module Postal
         if ENV['SERVER_FD']
           @server = TCPServer.for_fd(ENV['SERVER_FD'].to_i)
         else
-          @server = TCPServer.open('::', Postal.config.smtp_server.port)
+          @server = TCPServer.open(Postal.config.smtp_server.bind_address, Postal.config.smtp_server.port)
         end
         @server.autoclose = false
         @server.close_on_exec = false
@@ -62,7 +62,7 @@ module Postal
           @server.setsockopt(Socket::SOL_TCP, Socket::TCP_KEEPCNT, 5)
         end
         ENV['SERVER_FD'] = @server.to_i.to_s
-        logger.info "Listening on port #{Postal.config.smtp_server.port}"
+        logger.info "Listening on  #{Postal.config.smtp_server.bind_address}:#{Postal.config.smtp_server.port}"
       end
 
       def unlisten
@@ -147,15 +147,16 @@ module Postal
                   # Client went away
                   eof = true
                 end
+
+                # Normalize all \r\n and \n to \r\n
+                buffers[io] = buffers[io].encode(buffers[io].encoding, universal_newline: true).encode(buffers[io].encoding, crlf_newline: true)
+
                 # We line buffer, so look to see if we have received a newline
                 # and keep doing so until all buffered lines have been processed.
-                while buffers[io].index("\n")
+                while buffers[io].index("\r\n")
                   # Extract the line
-                  if buffers[io].index("\r\n")
-                    line, buffers[io] = buffers[io].split("\r\n", 2)
-                  else
-                    line, buffers[io] = buffers[io].split("\n", 2)
-                  end
+                  line, buffers[io] = buffers[io].split("\r\n", 2)
+
                   # Send the received line to the client object for processing
                   result = client.handle(line)
                   # If the client object returned some data, write it back to the client

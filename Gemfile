@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-gem 'rails', '= 5.2.5'
+gem 'rails', '= 5.2.6.2'
 gem 'mysql2'
 gem 'puma'
 gem 'turbolinks', '~> 5'
@@ -22,13 +22,13 @@ gem 'basic_ssl'
 gem 'clockwork'
 gem 'encrypto_signo'
 gem 'nio4r'
-gem 'mongo'
 gem 'sentry-raven'
 gem 'gelf'
 gem 'moonrope'
 gem 'jwt'
-gem 'acme-client'
 gem 'highline', :require => false
+gem 'resolv', '~> 0.2.1'
+gem 'dotenv-rails'
 
 group :development, :assets do
   gem 'sass-rails', '~> 5.0'
